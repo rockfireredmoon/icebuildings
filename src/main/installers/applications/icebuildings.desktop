@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Icebuildings
+Name[en_GB]=Icebuildings
+GenericName=Planet Forever Building,Cave and Dungeon Editor
+GenericName[en_GB]=Planet Forever Building,Cave and Dungeon Editor
+Comment=Planet Forever Building,Cave and Dungeon Editor
+Icon=icebuildings.png
+TryExec=icebuildings
+Exec=icebuildings
+Terminal=false
+# Categorie entry according to version 1.0 of
+# http://www.freedesktop.org/wiki/Specifications/menu-spec
+Categories=GNOME;Network;
+Encoding=UTF-8
