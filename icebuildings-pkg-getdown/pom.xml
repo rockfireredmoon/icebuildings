@@ -28,7 +28,9 @@
 						<goals>
 							<goal>updates</goal>
 							<goal>stub</goal>
+							<!--
 							<goal>applet</goal>
+							-->
 						</goals>
 						<configuration>
 							<appbase>${buildings.home}/getdown</appbase>
@@ -47,10 +49,10 @@
 							<ui>
 								<name>Icebuildings</name>
 								<icons>
-									<icon>${basedir}/../icebuildings-group/src/main/installers/images/icebuildings.png</icon>
+									<icon>${basedir}/../src/main/installers/images/icebuildings.png</icon>
 								</icons>
-								<progressImage>${basedir}/../icebuildings-group/src/main/installers/images/progress.png</progressImage>
-								<backgroundImage>${basedir}/../icebuildings-group/src/main/installers/images/splash.png</backgroundImage>
+								<progressImage>${basedir}/../src/main/installers/images/progress.png</progressImage>
+								<backgroundImage>${basedir}/../src/main/installers/images/splash.png</backgroundImage>
 								<progress>80, 244, 196, 11</progress>
 								<progressText>FFFFFF</progressText>
 								<statusText>FFFFFF</statusText>
@@ -58,6 +60,7 @@
 								<textShadow>111111</textShadow>
 							</ui>
 
+							<!--
 							<sign>
 								<keystore>${signingFiles}/${certificate.keystore}</keystore>
 								<keypass>${certificate.password}</keypass>
@@ -66,6 +69,7 @@
 								<alias>${certificate.alias}</alias>
 								<verify>true</verify>
 							</sign>
+							-->
 
 						</configuration>
 					</execution>
@@ -113,7 +117,7 @@
 						</data>
 						<data>
 							<type>directory</type>
-							<src>${basedir}/../icebuildings-group/src/main/installers/scripts</src>
+							<src>${basedir}/../src/main/installers/scripts</src>
 							<includes>*</includes>
 							<mapper>
 								<type>perm</type>
@@ -126,7 +130,7 @@
 						</data>
 						<data>
 							<type>directory</type>
-							<src>${basedir}/../icebuildings-group/src/main/installers/images</src>
+							<src>${basedir}/../src/main/installers/images</src>
 							<includes>icebuildings.png</includes>
 							<mapper>
 								<type>perm</type>
@@ -139,7 +143,7 @@
 						</data>
 						<data>
 							<type>directory</type>
-							<src>${basedir}/../icebuildings-group/src/main/installers/applications</src>
+							<src>${basedir}/../src/main/installers/applications</src>
 							<includes>*</includes>
 							<mapper>
 								<type>perm</type>
@@ -192,7 +196,7 @@
 							<groupname>root</groupname>
 							<sources>
 								<source>
-									<location>${basedir}/../icebuildings-group/src/main/installers/scripts/icebuildings</location>
+									<location>${basedir}/../src/main/installers/scripts/icebuildings</location>
 								</source>
 							</sources>
 						</mapping>
@@ -204,7 +208,7 @@
 							<groupname>root</groupname>
 							<sources>
 								<source>
-									<location>${basedir}/../icebuildings-group/src/main/installers/applications/icebuildings.desktop</location>
+									<location>${basedir}/../src/main/installers/applications/icebuildings.desktop</location>
 								</source>
 							</sources>
 						</mapping>
@@ -216,7 +220,7 @@
 							<groupname>root</groupname>
 							<sources>
 								<source>
-									<location>${basedir}/../icebuildings-group/src/main/installers/images/icebuildings.png</location>
+									<location>${basedir}/../src/main/installers/images/icebuildings.png</location>
 								</source>
 							</sources>
 						</mapping>
@@ -292,7 +296,7 @@
 			</plugin>
 
 			<!-- And now OS X -->
-
+			<!--
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>osxappbundle-maven-plugin</artifactId>
@@ -325,6 +329,7 @@
 					</execution>
 				</executions>
 			</plugin>
+			-->
 
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -355,7 +360,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>org.icemoon</groupId>
-			<artifactId>icebuildings</artifactId>
+			<artifactId>icebuildings-app</artifactId>
 			<version>${project.version}</version>
 			<scope>compile</scope>
 		</dependency>
