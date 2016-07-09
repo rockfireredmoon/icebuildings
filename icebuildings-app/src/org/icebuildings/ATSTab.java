@@ -383,7 +383,7 @@ public class ATSTab extends XTabPanelContent {
 								name = newATSDir + "/" + basename;
 							}
 
-							File outputFile = ((IcesceneApp) app).getAssets().getExternalAssetFile(name);
+							File outputFile = Icelib.makeParent(((IcesceneApp) app).getAssets().getExternalAssetFile(name));
 							OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile), 65536);
 							if (!useFileCount) {
 								out = new FilterOutputStream(out) {
