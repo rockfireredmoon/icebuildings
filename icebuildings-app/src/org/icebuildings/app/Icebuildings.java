@@ -53,8 +53,7 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 			throw new Exception("No URL supplied.");
 		}
 		Icebuildings app = new Icebuildings(cmdLine);
-		startApp(app, cmdLine, "PlanetForever - " + AppInfo.getName() + " - " + AppInfo.getVersion(),
-				BuildingsConstants.APPSETTINGS_NAME);
+		startApp(app, cmdLine, AppInfo.getName() + " - " + AppInfo.getVersion(), BuildingsConstants.APPSETTINGS_NAME);
 	}
 
 	private EntityFactory propFactory;
@@ -94,10 +93,12 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 		appearance.setHead(Appearance.Head.NORMAL);
 
 		flyCam.setDragToRotate(true);
-		flyCam.setMoveSpeed(prefs.getFloat(BuildingsConfig.BUILDINGS_MOVE_SPEED, BuildingsConfig.BUILDINGS_MOVE_SPEED_DEFAULT));
+		flyCam.setMoveSpeed(
+				prefs.getFloat(BuildingsConfig.BUILDINGS_MOVE_SPEED, BuildingsConfig.BUILDINGS_MOVE_SPEED_DEFAULT));
 		flyCam.setRotationSpeed(
 				prefs.getFloat(BuildingsConfig.BUILDINGS_ROTATE_SPEED, BuildingsConfig.BUILDINGS_ROTATE_SPEED_DEFAULT));
-		flyCam.setZoomSpeed(-prefs.getFloat(BuildingsConfig.BUILDINGS_ZOOM_SPEED, BuildingsConfig.BUILDINGS_ZOOM_SPEED_DEFAULT));
+		flyCam.setZoomSpeed(
+				-prefs.getFloat(BuildingsConfig.BUILDINGS_ZOOM_SPEED, BuildingsConfig.BUILDINGS_ZOOM_SPEED_DEFAULT));
 		flyCam.setEnabled(true);
 		setPauseOnLostFocus(false);
 
@@ -144,24 +145,25 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 		getStateManager().attach(previewAppState);
 
 		// Building editor
-		stateManager.attach(new BuildingEditorAppState(undoManager, prefs, propFactory, getAssets(), selectionManager, rootNode) {
+		stateManager.attach(
+				new BuildingEditorAppState(undoManager, prefs, propFactory, getAssets(), selectionManager, rootNode) {
 
-			@Override
-			protected void selectionChanged() {
-				BuildingXMLEntity selectedBuilding = getSelectedBuilding();
-				if (selectedBuilding != null) {
-					previewAppState.setBuilding(selectedBuilding);
-				}
-			}
+					@Override
+					protected void selectionChanged() {
+						BuildingXMLEntity selectedBuilding = getSelectedBuilding();
+						if (selectedBuilding != null) {
+							previewAppState.setBuilding(selectedBuilding);
+						}
+					}
 
-			protected void pieceSelected() {
-				Entity selectedPiece = getSelectedPiece();
-				if (selectedPiece != null) {
-					previewAppState.setPiece(selectedPiece);
-				}
-			}
+					protected void pieceSelected() {
+						Entity selectedPiece = getSelectedPiece();
+						if (selectedPiece != null) {
+							previewAppState.setPiece(selectedPiece);
+						}
+					}
 
-		});
+				});
 
 		// Input
 		getKeyMapManager().addMapping(MAPPING_OPTIONS);
@@ -172,8 +174,8 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 
 	@Override
 	protected void configureAssetManager(ServerAssetManager serverAssetManager) {
-		getAssets()
-				.setAssetsExternalLocation(prefs.get(BuildingsConfig.APP_WORKSPACE_DIR, BuildingsConfig.APP_WORKSPACE_DIR_DEFAULT));
+		getAssets().setAssetsExternalLocation(
+				prefs.get(BuildingsConfig.APP_WORKSPACE_DIR, BuildingsConfig.APP_WORKSPACE_DIR_DEFAULT));
 	}
 
 	public void onAction(String name, boolean isPressed, float tpf) {

@@ -9,4 +9,11 @@ for i in /usr/lib/icebuildings/* ; do
 		ln -s "${i}" . 2>/dev/null
 	fi
 done
-java -jar /usr/lib/icebuildings/getdown.jar . 
+if [ ! -f logging.properties ] ; then
+	ln -sf /etc/icebuildings/logging.properties logging.properties
+fi 
+if [ $# = 0 ] ; then
+	java -jar /usr/lib/icebuildings/getdown.jar .
+else
+	java -jar /usr/lib/icebuildings/getdown.jar . "" $@
+fi 

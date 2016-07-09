@@ -102,6 +102,7 @@ Section "Icebuildings" Icebuildings
   File icebuildingssmall.ico
   File icebuildingsbanner.bmp
   File Readme.txt
+  File ..\..\..\src\main\installers\configuration\logging.properties
   
   ;Store installation folder
   WriteRegStr HKCU "Software\Icebuildings" "" $INSTDIR
