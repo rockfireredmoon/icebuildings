@@ -12,84 +12,88 @@ import java.util.prefs.Preferences;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.icelib.Icelib;
-import org.icelib.UndoManager;
-import org.icescene.Alarm.AlarmTask;
 import org.icescene.IcemoonAppState;
 import org.icescene.IcesceneApp;
 import org.icescene.NodeVisitor;
 import org.icescene.NodeVisitor.Visit;
+import org.icescene.NodeVisitor.VisitResult;
 import org.icescene.assets.Assets;
 import org.icescene.build.SelectionManager;
 import org.icescene.build.SelectionManager.Listener;
 import org.icescene.propertyediting.PropertiesPanel;
-import org.icescene.props.BuildingXMLEntity;
 import org.icescene.props.Entity;
 import org.icescene.props.EntityFactory;
-import org.icescene.ui.WindowManagerAppState;
-import org.iceui.HPosition;
-import org.iceui.VPosition;
-import org.iceui.XTabPanelContent;
+import org.icescene.props.XMLProp;
+import org.icescene.props.XRef;
+import org.icescene.scene.Buildable;
 import org.iceui.controls.ElementStyle;
-import org.iceui.controls.FancyButton;
-import org.iceui.controls.FancyPersistentWindow;
-import org.iceui.controls.FancyWindow;
-import org.iceui.controls.IconTabControl;
-import org.iceui.controls.SaveType;
+import org.iceui.controls.TabPanelContent;
 
-import com.jme3.input.event.KeyInputEvent;
-import com.jme3.input.event.MouseButtonEvent;
-import com.jme3.math.Vector2f;
+import com.jme3.font.BitmapFont.Align;
+import com.jme3.font.BitmapFont.VAlign;
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
 
 import icemoon.iceloader.ServerAssetManager;
-import icetone.controls.buttons.ButtonAdapter;
 import icetone.controls.buttons.CheckBox;
-import icetone.controls.lists.Table;
-import icetone.controls.lists.Table.TableCell;
-import icetone.controls.lists.Table.TableRow;
+import icetone.controls.buttons.PushButton;
+import icetone.controls.containers.TabControl;
+import icetone.controls.containers.TabControl.TabButton;
+import icetone.controls.table.Table;
+import icetone.controls.table.TableCell;
+import icetone.controls.table.TableRow;
 import icetone.controls.text.Label;
 import icetone.controls.text.TextField;
-import icetone.core.Container;
-import icetone.core.Element;
+import icetone.core.BaseElement;
+import icetone.core.Size;
+import icetone.core.StyledContainer;
+import icetone.core.layout.Border;
 import icetone.core.layout.BorderLayout;
 import icetone.core.layout.mig.MigLayout;
+import icetone.core.undo.UndoManager;
+import icetone.core.utils.Alarm.AlarmTask;
+import icetone.extras.appstates.FrameManagerAppState;
+import icetone.extras.windows.PersistentWindow;
+import icetone.extras.windows.SaveType;
 
 /**
  */
 public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
-		implements PreferenceChangeListener, Listener<Entity, EntityBuildableControl> {
+		implements PreferenceChangeListener, Listener<Buildable, DefaultBuildableControl> {
 
 	private static final Logger LOG = Logger.getLogger(BuildingEditorAppState.class.getName());
-	protected FancyPersistentWindow window;
+	protected PersistentWindow window;
 	private EntityFactory propFactory;
 	private Table buildingsTable;
-	private FancyButton addButton;
-	private FancyButton removeButton;
-	private FancyButton saveButton;
-	private Table piecesTable;
+	private PushButton addButton;
+	private PushButton removeButton;
+	private PushButton saveButton;
+	private Table builablesTable;
 	private boolean adjust;
 	private Set<String> atsMeshes = new HashSet<String>();
 	private TextField filter;
 	private AlarmTask task;
-	private BuildingXMLEntity building;
-	private PropertiesPanel<Entity> pieceEditor;
-	private IconTabControl tabs;
+	private XMLProp building;
+	private PropertiesPanel<Buildable> buildableEditor;
+	private TabControl tabs;
 	private ATSTab atsTab;
-	private SelectionManager<Entity, EntityBuildableControl> selectionManager;
+	private SelectionManager<Buildable, DefaultBuildableControl> selectionManager;
 	private Node parentNode;
 	private CheckBox bldg;
 	private CheckBox cav;
 	private CheckBox dng;
+	private CheckBox cl;
+	private UndoManager undoManager;
 
 	public BuildingEditorAppState(UndoManager undoManager, Preferences pref, EntityFactory propFactory, Assets assets,
-			SelectionManager<Entity, EntityBuildableControl> selectionManager, Node parentNode) {
+			SelectionManager<Buildable, DefaultBuildableControl> selectionManager, Node parentNode) {
 		super(pref);
 		addPrefKeyPattern(BuildingsConfig.BUILDINGS + ".*");
 
 		this.parentNode = parentNode;
 		this.selectionManager = selectionManager;
 		this.propFactory = propFactory;
+		this.undoManager = undoManager;
 	}
 
 	public String getSelectedBuildingName() {
@@ -97,9 +101,9 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 		return row == null || !row.isLeaf() ? null : (String) row.getValue();
 	}
 
-	public Entity getSelectedPiece() {
-		TableRow row = piecesTable.getSelectedRow();
-		return row == null ? null : (Entity) row.getValue();
+	public Buildable getSelectedBuilable() {
+		TableRow row = builablesTable.getSelectedRow();
+		return row == null ? null : (Buildable) row.getValue();
 	}
 
 	@Override
@@ -108,8 +112,8 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 		assetManager = app.getAssetManager();
 		screen = ((IcesceneApp) app).getScreen();
 
-		window = new FancyPersistentWindow(screen, BuildingsConfig.BUILDINGS, 8, VPosition.TOP, HPosition.LEFT,
-				new Vector2f(600, 520), FancyWindow.Size.SMALL, false, SaveType.POSITION_AND_SIZE, prefs) {
+		window = new PersistentWindow(screen, BuildingsConfig.BUILDINGS, 8, VAlign.Top, Align.Left, new Size(600, 520),
+				false, SaveType.POSITION_AND_SIZE, prefs) {
 			@Override
 			protected void onCloseWindow() {
 				super.onCloseWindow();
@@ -118,7 +122,7 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 		};
 
 		// Window management (if available)
-		WindowManagerAppState win = stateManager.getState(WindowManagerAppState.class);
+		FrameManagerAppState win = stateManager.getState(FrameManagerAppState.class);
 		if (win != null) {
 			window.setMinimizable(true);
 		}
@@ -126,11 +130,18 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 		// window.setIsResizable(false);
 		window.setWindowTitle("Building");
 
-		tabs = new IconTabControl(screen);
-		tabs.addTabWithIcon("Building", "Interface/Styles/Gold/Common/Icons/home.png");
-		tabs.addTabChild(0, buildingTab());
-		tabs.addTabWithIcon("ATS", "Interface/Styles/Gold/Common/Icons/paint.png");
-		tabs.addTabChild(1, atsTab = new ATSTab(screen) {
+		tabs = new TabControl(screen);
+		tabs.addStyleClass("editor-tabs");
+		tabs.addTab(new TabButton(screen) {
+			{
+				setStyleId("building");
+			}
+		}, buildingTab());
+		tabs.addTab(new TabButton(screen) {
+			{
+				setStyleId("ats");
+			}
+		}, atsTab = new ATSTab(screen) {
 			@Override
 			protected void onSelectedChanged() {
 				rebuildPieces();
@@ -139,45 +150,46 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 			}
 
 		});
-		tabs.addTabWithIcon("Parts", "Interface/Styles/Gold/Common/Icons/bricks.png");
-		tabs.addTabChild(2, piecesTab());
+		tabs.addTab(new TabButton(screen) {
+			{
+				setStyleId("pieces");
+			}
+		}, piecesTab());
 
 		// Content
-		final Element windowContent = window.getContentArea();
+		final BaseElement windowContent = window.getContentArea();
 		windowContent.setLayoutManager(new BorderLayout()); // Top
-		windowContent.addChild(tabs, BorderLayout.Border.CENTER);
+		windowContent.addElement(tabs, Border.CENTER);
 
 		// Pack and show
 		setAvailable();
-		window.setIsResizable(true);
-		screen.addElement(window, null, true);
-		window.showWithEffect();
+		window.setResizable(true);
+		screen.showElement(window);
 
-		adjust(true);
-		try {
-			rebuildBuildingsTable();
-		} finally {
-			adjust(false);
-		}
+		rebuildBuildingsTable();
 
 		//
 		selectionManager.addListener(this);
 	}
 
-	public BuildingXMLEntity getSelectedBuilding() {
+	public XMLProp getSelectedBuilding() {
 		return building;
 	}
 
 	@Override
-	public void selectionChanged(SelectionManager<Entity, EntityBuildableControl> selectionManager) {
+	public void selectionChanged(SelectionManager<Buildable, DefaultBuildableControl> selectionManager) {
 		adjust = true;
 		try {
-			Entity e = selectionManager.getFirstSelectedProp();
+			Buildable e = selectionManager.getFirstSelectedProp();
+			LOG.info(String.format("Selected %s", e));
 			if (e == null) {
-				piecesTable.clearSelection();
+				builablesTable.runAdjusting(() -> builablesTable.clearSelection());
 			} else {
-				piecesTable.setSelectedRowObjects(Arrays.asList(e));
-				piecesTable.scrollToSelected();
+				if (e instanceof Buildable && (!builablesTable.isAnythingSelected()
+						|| !e.equals(builablesTable.getSelectedRow().getValue()))) {
+					builablesTable.setSelectedRowObjects(Arrays.asList(e));
+					builablesTable.scrollToSelected();
+				}
 			}
 		} finally {
 			adjust = false;
@@ -188,7 +200,7 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 	protected void handlePrefUpdateSceneThread(PreferenceChangeEvent evt) {
 	}
 
-	protected void pieceSelected() {
+	protected void buildableSelected() {
 
 	}
 
@@ -196,183 +208,176 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 
 	}
 
+	protected void refreshPiece() {
+		getSelectedBuilding().reload();
+	}
+
 	@Override
 	protected void onCleanup() {
 		super.onCleanup();
 		selectionManager.removeListener(this);
 		window.setDestroyOnHide(true);
-		window.hideWithEffect();
+		window.hide();
 	}
 
-	private void pieceChanged() {
-		Entity selectedPiece = getSelectedPiece();
-		pieceEditor.setObject(selectedPiece);
-		NodeVisitor v = new NodeVisitor(parentNode);
-		v.visit(new Visit() {
-			@Override
-			public void visit(Spatial node) {
-				EntityBuildableControl ebc = node.getControl(EntityBuildableControl.class);
-				if (ebc != null) {
-					if (ebc.getEntity().equals(selectedPiece)) {
-						selectionManager.select(ebc, 0);
-						// TODO visitor needs a way to break out
+	private void buildableChanged() {
+		Buildable selectedPiece = getSelectedBuilable();
+		buildableEditor.setObject(selectedPiece);
+		if (selectedPiece == null)
+			selectionManager.clearSelection();
+		else {
+			NodeVisitor v = new NodeVisitor(parentNode);
+			v.visit(new Visit() {
+				@Override
+				public VisitResult visit(Spatial node) {
+					DefaultBuildableControl ebc = node.getControl(DefaultBuildableControl.class);
+					if (ebc != null) {
+						if (ebc.getEntity().equals(selectedPiece)) {
+							selectionManager.select(ebc, 0);
+							return VisitResult.END;
+						}
 					}
+					return VisitResult.CONTINUE;
 				}
-			}
-		});
+			});
+		}
 	}
 
 	private void setAvailable() {
 
 	}
 
-	private XTabPanelContent buildingTab() {
+	private TabPanelContent buildingTab() {
 
 		// Top
-		Element top = new Element(screen);
+		BaseElement top = new BaseElement(screen);
 		top.setLayoutManager(new MigLayout(screen, "", "[][fill,grow][]", "[]"));
-		top.addChild(new Label("Find:", screen));
-		filter = new TextField(screen) {
-
-			@Override
-			public void controlKeyPressHook(KeyInputEvent evt, String text) {
-				refilter();
-			}
-		};
-		top.addChild(filter);
-		ButtonAdapter clearFilter = new ButtonAdapter(screen) {
-			@Override
-			public void onButtonMouseLeftDown(MouseButtonEvent evt, boolean toggled) {
-				filter.setText("");
-				refilter();
-			}
-		};
+		top.addElement(new Label("Find:", screen));
+		filter = new TextField(screen);
+		filter.onKeyboardReleased(evt -> refilter());
+		top.addElement(filter);
+		PushButton clearFilter = new PushButton(screen);
+		clearFilter.onMouseReleased(evt -> {
+			filter.setText("");
+			refilter();
+		});
 		clearFilter.setText("Clear");
-		top.addChild(clearFilter);
+		top.addElement(clearFilter);
 
 		// Types
-		Element type = new Element(screen);
-		type.setLayoutManager(new MigLayout(screen, "", "[][][]", "[]"));
-		bldg = new CheckBox(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				refilter();
-			}
-		};
-		bldg.setLabelText("Buildings");
-		bldg.setIsChecked(true);
-		cav = new CheckBox(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				refilter();
-			}
-		};
-		cav.setLabelText("Caves");
-		cav.setIsChecked(true);
-		dng = new CheckBox(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				refilter();
-			}
-		};
-		dng.setLabelText("Dungeon");
-		dng.setIsChecked(true);
-		type.addChild(bldg);
-		type.addChild(cav);
-		type.addChild(dng);
+		BaseElement type = new BaseElement(screen);
+		type.setLayoutManager(new MigLayout(screen, "", "[][][][]", "[]"));
+		bldg = new CheckBox(screen);
+		bldg.onChange(evt -> refilter());
+		bldg.setText("Buildings");
+		bldg.setChecked(true);
+		cav = new CheckBox(screen);
+		cav.onChange(evt -> refilter());
+		cav.setText("Caves");
+		cav.setChecked(true);
+		dng = new CheckBox(screen);
+		dng.onChange(evt -> refilter());
+		dng.setText("Dungeon");
+		dng.setChecked(true);
+		cl = new CheckBox(screen);
+		cl.onChange(evt -> refilter());
+		cl.setText("CL");
+		cl.setChecked(true);
+		type.addElement(bldg);
+		type.addElement(cav);
+		type.addElement(dng);
+		type.addElement(cl);
 
 		// Models
-		buildingsTable = new Table(screen) {
-			@Override
-			public void onChange() {
-				if (!adjust) {
-					String n = getSelectedBuildingName();
-					if (n != null) {
-						rebuildPieces();
-						setAvailable();
-						selectionChanged();
-					}
-				}
-			}
-		};
+		buildingsTable = new Table(screen);
 		buildingsTable.setHeadersVisible(false);
 		buildingsTable.addColumn("Model");
 		buildingsTable.setColumnResizeMode(Table.ColumnResizeMode.AUTO_ALL);
+		buildingsTable.onChanged(evt -> {
+			if (!evt.getSource().isAdjusting()) {
+				String n = getSelectedBuildingName();
+				if (n != null) {
+					rebuildPieces();
+					setAvailable();
+					selectionChanged();
+				}
+			}
+		});
 
 		// Add
-		addButton = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
+		addButton = new PushButton(screen) {
+			{
+				setStyleClass("fancy");
 			}
 		};
 		addButton.setText("Add");
 
 		// Remove
-		removeButton = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
+		removeButton = new PushButton(screen) {
+			{
+				setStyleClass("fancy");
 			}
 		};
 		removeButton.setText("Remove");
 
 		// Save
-		saveButton = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				// try {
-				// } catch (IOException ioe) {
-				// error("Failed to save environment.", ioe);
-				// LOG.log(Level.SEVERE, "Failed to save environment.", ioe);
-				// }
+		saveButton = new PushButton(screen) {
+			{
+				setStyleClass("fancy");
 			}
 		};
+		saveButton.onMouseReleased(evt -> {
+			// try {
+			// } catch (IOException ioe) {
+			// error("Failed to save environment.", ioe);
+			// LOG.log(Level.SEVERE, "Failed to save environment.", ioe);
+			// }
+		});
 		saveButton.setText("Save");
 
 		// Buttons
-		Container bottom = new Container(screen);
+		StyledContainer bottom = new StyledContainer(screen);
 		bottom.setLayoutManager(new MigLayout(screen, "fill", "[][]push[]", "[]"));
-		bottom.addChild(addButton);
-		bottom.addChild(removeButton);
-		bottom.addChild(saveButton);
+		bottom.addElement(addButton);
+		bottom.addElement(removeButton);
+		bottom.addElement(saveButton);
 
 		// Tab
-		XTabPanelContent tab = new XTabPanelContent(screen);
-		tab.setLayoutManager(new MigLayout(screen, "wrap 1", "[fill,grow]", "[][][fill,grow][]"));
-		tab.addChild(top);
-		tab.addChild(type);
-		tab.addChild(buildingsTable);
-		tab.addChild(bottom);
+		TabPanelContent tab = new TabPanelContent(screen);
+		tab.setLayoutManager(
+				new MigLayout(screen, "wrap 1", "[fill,grow]", "[shrink 0][shrink 0][fill,grow][shrink 0]"));
+		tab.addElement(top);
+		tab.addElement(type);
+		tab.addElement(buildingsTable);
+		tab.addElement(bottom);
 
 		return tab;
 	}
 
-	private XTabPanelContent piecesTab() {
+	private TabPanelContent piecesTab() {
 
 		// Pieces
-		piecesTable = new Table(screen) {
-
-			@Override
-			public void onChange() {
-				if (!adjust) {
-					pieceChanged();
-					setAvailable();
-					pieceSelected();
-				}
+		builablesTable = new Table(screen);
+		builablesTable.onChanged(evt -> {
+			if (!evt.getSource().isAdjusting()) {
+				buildableChanged();
+				setAvailable();
+				buildableSelected();
 			}
-		};
-		piecesTable.setHeadersVisible(true);
-		piecesTable.addColumn("Name");
-		piecesTable.addColumn("ATS");
-		piecesTable.setColumnResizeMode(Table.ColumnResizeMode.AUTO_FIRST);
-		piecesTable.getColumns().get(1).setWidth(64);
+		});
+		builablesTable.setHeadersVisible(true);
+		builablesTable.addColumn("Name");
+		builablesTable.addColumn("ATS");
+		builablesTable.setColumnResizeMode(Table.ColumnResizeMode.AUTO_FIRST);
+		builablesTable.getColumns().get(1).setWidth(64);
 
-		pieceEditor = new PropertiesPanel<Entity>(screen, prefs);
+		buildableEditor = new PropertiesPanel<Buildable>(screen, prefs, undoManager);
 
 		// Tab
-		XTabPanelContent tab = new XTabPanelContent(screen);
-		tab.setLayoutManager(new BorderLayout());
-		tab.addChild(piecesTable, BorderLayout.Border.NORTH);
-		tab.addChild(pieceEditor, BorderLayout.Border.CENTER);
+		TabPanelContent tab = new TabPanelContent(screen);
+		tab.setLayoutManager(new MigLayout("wrap 1", "[grow, fill]", "[grow,fill][grow,fill]"));
+		tab.addElement(builablesTable);
+		tab.addElement(buildableEditor);
 
 		return tab;
 	}
@@ -392,23 +397,30 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 
 	private void rebuildBuildingsTable() {
 		LOG.info("Rebuilding building table");
+		builablesTable.invalidate();
 		resetBuildingsTable();
-		if (bldg.getIsChecked())
-			filterRows(((ServerAssetManager) app.getAssetManager()).getAssetNamesMatching("Bldg/Bldg-.*/.*\\.csm.xml"));
-		if (cav.getIsChecked())
-			filterRows(((ServerAssetManager) app.getAssetManager()).getAssetNamesMatching("Cav/Cav-.*/.*\\.csm.xml"));
-		if (dng.getIsChecked())
-			filterRows(((ServerAssetManager) app.getAssetManager()).getAssetNamesMatching("Dng/Dng-.*/.*\\.csm.xml"));
-		buildingsTable.pack();
+		if (cl.isChecked())
+			filterRows(
+					((ServerAssetManager) app.getAssetManager()).getAssetNamesMatching("CL/CL-Candel.*/.*\\.csm.xml"));
+		// if (bldg.getIsChecked())
+		// filterRows(((ServerAssetManager)
+		// app.getAssetManager()).getAssetNamesMatching("Bldg/Bldg-.*/.*\\.csm.xml"));
+		// if (cav.getIsChecked())
+		// filterRows(((ServerAssetManager)
+		// app.getAssetManager()).getAssetNamesMatching("Cav/Cav-.*/.*\\.csm.xml"));
+		// if (dng.getIsChecked())
+		// filterRows(((ServerAssetManager)
+		// app.getAssetManager()).getAssetNamesMatching("Dng/Dng-.*/.*\\.csm.xml"));
+		builablesTable.validate();
 		if (!buildingsTable.isAnythingSelected() && buildingsTable.getRowCount() > 0)
-			buildingsTable.setSelectedRowIndex(0);
+			buildingsTable.runAdjusting(() -> buildingsTable.setSelectedRowIndex(0));
 	}
 
 	private void filterRows(final Set<String> xmls) {
 		String ft = filter.getText().toLowerCase();
 		for (String s : xmls) {
 			if (StringUtils.isBlank(ft) || s.toLowerCase().contains(ft))
-				addBuildingRow(s, false);
+				addBuildingRow(s);
 		}
 	}
 
@@ -418,7 +430,7 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 			String atsName = atsTab.getATSName();
 			atsMeshes.clear();
 			for (String s : ((ServerAssetManager) app.getAssetManager())
-					.getAssetNamesMatching(String.format("ATS/%s/.*\\.mesh.*", atsName))) {
+					.getAssetNamesMatching(String.format("ATS/%s/.*\\.mesh.* ", atsName))) {
 				String b = FilenameUtils.getName(s);
 				if (b.endsWith(".xml")) {
 					b = FilenameUtils.getBaseName(b);
@@ -427,17 +439,21 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 				atsMeshes.add(b);
 			}
 
-			for (TableRow r : piecesTable.getRows()) {
-				Entity piece = (Entity) r.getValue();
-				String ats = FilenameUtils.getBaseName(piece.getMesh().toString().replace("$(ATS)", atsName));
+			for (TableRow r : builablesTable.getRows()) {
+				Buildable b = (Buildable) r.getValue();
 				TableCell cb = r.getCell(1);
-				boolean exists = atsMeshes.contains(ats);
-				cb.setText(exists ? "Yes" : "No");
-				if (exists) {
-					ElementStyle.successColor(screen, cb);
-				} else {
-					ElementStyle.errorColor(screen, cb);
-				}
+				if (b instanceof Entity) {
+					Entity e = (Entity) b;
+					String ats = FilenameUtils.getBaseName(e.getMesh().toString().replace("$(ATS)", atsName));
+					boolean exists = atsMeshes.contains(ats);
+					cb.setText(exists ? "Yes" : "No");
+					if (exists) {
+						ElementStyle.successColor(cb);
+					} else {
+						ElementStyle.errorColor(cb);
+					}
+				} else
+					cb.setText("N/A");
 			}
 		} finally {
 			adjust(false);
@@ -446,46 +462,54 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 
 	private void rebuildPieces() {
 		LOG.info("Rebuilding pieces table");
-		piecesTable.removeAllRows();
+
+		builablesTable.invalidate();
+		builablesTable.removeAllRows();
 		String selectedBuildingName = getSelectedBuildingName();
-		String atsName = atsTab.getATSName();
-		if (atsName != null) {
-			if (selectedBuildingName == null) {
-				info("Pick a building in the Building tab to activate the preview");
-			} else {
-				building = (BuildingXMLEntity) propFactory.getProp(selectedBuildingName + "?ATS=" + atsName);
-				if (building != null) {
-					for (Entity e : building.getComponent().getEntities()) {
-						String mesh = e.getMesh();
-						if (!StringUtils.isBlank(mesh)) {
-							String atsMesh = mesh.replace("$(ATS)", atsName);
-							String baseMeshName = FilenameUtils.getBaseName(atsMesh);
-							TableRow row = new TableRow(screen, piecesTable, e);
-							Table.TableCell nameCell = new Table.TableCell(screen, baseMeshName, atsMesh);
-							row.addChild(nameCell);
-							Table.TableCell atsCell = new Table.TableCell(screen, "");
-							row.addChild(atsCell);
-							piecesTable.addRow(row, false);
-						}
+		String atsName = null;
+		if (selectedBuildingName == null) {
+			info("Pick a building in the Building tab to activate the preview");
+		} else {
+			if (!selectedBuildingName.startsWith("CL-")) {
+				atsName = atsTab.getATSName();
+			}
+			building = propFactory
+					.getProp(selectedBuildingName + (StringUtils.isBlank(atsName) ? "" : "?ATS=" + atsName));
+			if (building != null) {
+				for (Entity e : building.getComponent().getEntities()) {
+					String mesh = e.getMesh();
+					if (!StringUtils.isBlank(mesh)) {
+						String atsMesh = mesh.replace("$(ATS)", atsName == null ? "NO_ATS" : atsName);
+						String baseMeshName = FilenameUtils.getBaseName(atsMesh);
+						TableRow row = new TableRow(screen, builablesTable, e);
+						TableCell nameCell = new TableCell(screen, baseMeshName, atsMesh);
+						row.addElement(nameCell);
+						TableCell atsCell = new TableCell(screen, "");
+						row.addElement(atsCell);
+						builablesTable.addRow(row);
 					}
 				}
-			}
-		} else {
-			if (selectedBuildingName != null) {
-				info("Pick a skin in the ATS tab to activate the preview.");
+
+				for (XRef e : building.getComponent().getXRefs()) {
+					TableRow row = new TableRow(screen, builablesTable, e);
+					row.addCell(e.getCRef(), e);
+					row.addCell("", null);
+					builablesTable.addRow(row);
+				}
 			}
 		}
-		piecesTable.pack();
+		builablesTable.validate();
+
 		checkAvailableATS();
 	}
 
-	private void addBuildingRow(final String buildingComponentPath, boolean pack) {
+	private void addBuildingRow(final String buildingComponentPath) {
 		// Is there a row for the parent folder?
 		String buildingTypePath = FilenameUtils.normalizeNoEndSeparator(FilenameUtils.getPath(buildingComponentPath));
 		String buildingType = FilenameUtils.getName(buildingTypePath);
 		String buildingName = FilenameUtils.getBaseName(FilenameUtils.getBaseName(buildingComponentPath));
 
-		Table.TableRow parentRow = null;
+		TableRow parentRow = null;
 
 		for (TableRow r : buildingsTable.getRows()) {
 			if (r.getValue().equals(buildingType)) {
@@ -496,17 +520,17 @@ public class BuildingEditorAppState extends IcemoonAppState<IcemoonAppState<?>>
 			parentRow = new TableRow(screen, buildingsTable, buildingType);
 			parentRow.addCell(buildingType, buildingType);
 			parentRow.setLeaf(false);
-			buildingsTable.addRow(parentRow, pack);
+			buildingsTable.addRow(parentRow);
 		}
 
 		// Model
 		String buildingPath = String.format("%s#%s", buildingType, buildingName);
-		final Table.TableCell cell1 = new Table.TableCell(screen, buildingName, buildingPath);
-		final Table.TableRow row = new Table.TableRow(screen, buildingsTable, buildingPath);
-		row.addChild(cell1);
+		final TableCell cell1 = new TableCell(screen, buildingName, buildingPath);
+		final TableRow row = new TableRow(screen, buildingsTable, buildingPath);
+		row.addElement(cell1);
 		row.setToolTipText(Icelib.getBasename(Icelib.getFilename(buildingName)));
 		row.setLeaf(true);
-		parentRow.addRow(row, pack);
+		parentRow.addRow(row);
 
 		setAvailable();
 	}

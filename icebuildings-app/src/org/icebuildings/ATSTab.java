@@ -20,42 +20,44 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.icelib.Icelib;
 import org.icelib.XDesktop;
-import org.icescene.Alarm;
-import org.icescene.Alarm.AlarmTask;
 import org.icescene.FileMonitor;
 import org.icescene.FileMonitor.Monitor;
 import org.icescene.HUDMessageAppState;
+import org.icescene.HUDMessageAppState.Channel;
 import org.icescene.IcesceneApp;
-import org.iceui.XTabPanelContent;
 import org.iceui.controls.ElementStyle;
-import org.iceui.controls.FancyButton;
-import org.iceui.controls.FancyInputBox;
-import org.iceui.controls.FancyWindow;
 import org.iceui.controls.ImageTableCell;
-import org.iceui.controls.UIUtil;
+import org.iceui.controls.TabPanelContent;
 
 import com.jme3.asset.AssetInfo;
 import com.jme3.asset.AssetKey;
-import com.jme3.input.event.KeyInputEvent;
 import com.jme3.input.event.MouseButtonEvent;
 import com.jme3.math.Vector2f;
 import com.jme3.texture.Texture;
 
 import icemoon.iceloader.IndexItem;
 import icemoon.iceloader.ServerAssetManager;
-import icetone.controls.buttons.ButtonAdapter;
 import icetone.controls.buttons.CheckBox;
+import icetone.controls.buttons.PushButton;
+import icetone.controls.containers.Frame;
 import icetone.controls.extras.Indicator;
-import icetone.controls.lists.Table;
-import icetone.controls.lists.Table.TableRow;
+import icetone.controls.table.Table;
+import icetone.controls.table.TableCell;
+import icetone.controls.table.TableRow;
 import icetone.controls.text.Label;
 import icetone.controls.text.TextField;
-import icetone.core.Container;
-import icetone.core.Element;
-import icetone.core.ElementManager;
+import icetone.core.BaseElement;
+import icetone.core.BaseScreen;
+import icetone.core.Orientation;
+import icetone.core.StyledContainer;
+import icetone.core.ToolKit;
+import icetone.core.layout.ScreenLayoutConstraints;
 import icetone.core.layout.mig.MigLayout;
+import icetone.core.utils.Alarm;
+import icetone.core.utils.Alarm.AlarmTask;
+import icetone.extras.windows.InputBox;
 
-public class ATSTab extends XTabPanelContent {
+public class ATSTab extends TabPanelContent {
 	final static Logger LOG = Logger.getLogger(ATSTab.class.getName());
 
 	final static String[] PREVIEW_IMAGE_PATTERNS = { "${name}.png", "${name}-walls.png", "${name}-interior.png",
@@ -63,8 +65,8 @@ public class ATSTab extends XTabPanelContent {
 
 	private Table atsTable;
 	private TextField filter;
-	private FancyButton cloneATSButton;
-	private FancyButton dirButton;
+	private PushButton cloneATSButton;
+	private PushButton dirButton;
 	private AlarmTask task;
 	private File cloningATSDir;
 	private boolean cloning;
@@ -74,18 +76,11 @@ public class ATSTab extends XTabPanelContent {
 	private CheckBox cav;
 	private CheckBox dng;
 
-	public ATSTab(ElementManager screen) {
+	public ATSTab(BaseScreen screen) {
 		super(screen);
 
 		// Models
-		atsTable = new Table(screen) {
-			@Override
-			public void onChange() {
-				atsSelected();
-				onSelectedChanged();
-				setAvailable();
-			}
-		};
+		atsTable = new Table(screen);
 		// atsTable.setHeadersVisible(false);
 		atsTable.addColumn("Preview");
 		atsTable.addColumn("Name");
@@ -93,95 +88,81 @@ public class ATSTab extends XTabPanelContent {
 		atsTable.getColumns().get(0).setWidth(96);
 
 		// Types
-		Element type = new Element(screen);
+		BaseElement type = new BaseElement(screen);
 		type.setLayoutManager(new MigLayout(screen, "", "[][][]", "[]"));
-		bldg = new CheckBox(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				refilter();
-			}
-		};
-		bldg.setLabelText("Buildings");
-		bldg.setIsChecked(true);
-		cav = new CheckBox(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				refilter();
-			}
-		};
-		cav.setIsChecked(true);
-		cav.setLabelText("Caves");
-		dng = new CheckBox(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				refilter();
-			}
-		};
-		dng.setIsChecked(true);
-		dng.setLabelText("Dungeon");
-		type.addChild(bldg);
-		type.addChild(cav);
-		type.addChild(dng);
+		bldg = new CheckBox(screen);
+		bldg.onMouseReleased(evt -> refilter());
+		bldg.setText("Buildings");
+		bldg.setChecked(true);
+
+		cav = new CheckBox(screen);
+		cav.onChange(evt -> refilter());
+		cav.setChecked(true);
+		cav.setText("Caves");
+		dng = new CheckBox(screen);
+		dng.onChange(evt -> refilter());
+		dng.setChecked(true);
+		dng.setText("Dungeon");
+		type.addElement(bldg);
+		type.addElement(cav);
+		type.addElement(dng);
 
 		// Top
-		Element top = new Element(screen);
+		BaseElement top = new BaseElement(screen);
 		top.setLayoutManager(new MigLayout(screen, "", "[][fill,grow][]", "[]"));
-		top.addChild(new Label("Find:", screen));
-		filter = new TextField(screen) {
-
-			@Override
-			public void controlKeyPressHook(KeyInputEvent evt, String text) {
-				refilter();
-			}
-		};
-		top.addChild(filter);
-		ButtonAdapter clearFilter = new ButtonAdapter(screen) {
-			@Override
-			public void onButtonMouseLeftDown(MouseButtonEvent evt, boolean toggled) {
-				filter.setText("");
-				refilter();
-			}
-		};
-		clearFilter.setText("Clear");
-		top.addChild(clearFilter);
+		top.addElement(new Label("Find:", screen));
+		filter = new TextField(screen);
+		filter.onKeyboardReleased(evt -> refilter());
+		top.addElement(filter);
+		top.addElement(new PushButton(screen, "Clear").onMouseReleased(evt -> {
+			filter.setText("");
+			refilter();
+		}));
 
 		// Add
-		cloneATSButton = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				askForCloneName(getATSName());
+		cloneATSButton = new PushButton(screen, "Clone") {
+			{
+				setStyleClass("fancy");
 			}
 		};
+		cloneATSButton.onMouseReleased(evt -> askForCloneName(getATSName()));
 		cloneATSButton.setText("Clone");
 
 		// Save
-		dirButton = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				File f = getATSFolder();
-				try {
-					XDesktop.getDesktop().open(f);
-				} catch (Exception ex) {
-					LOG.log(Level.SEVERE, String.format("Failed to open folder %s", f), ex);
-					error(String.format("Failed to open folder %s", f), ex);
-				}
+		dirButton = new PushButton(screen) {
+			{
+				setStyleClass("fancy");
 			}
 		};
+		dirButton.onMouseReleased(evt -> {
+			File f = getATSFolder();
+			try {
+				XDesktop.getDesktop().open(f);
+			} catch (Exception ex) {
+				LOG.log(Level.SEVERE, String.format("Failed to open folder %s", f), ex);
+				error(String.format("Failed to open folder %s", f), ex);
+			}
+		});
 		dirButton.setText("Folder");
 		dirButton.setToolTipText("Open the folder where the local copy of this ATS is stored.");
 
 		// Buttons
-		Container bottom = new Container(screen);
+		StyledContainer bottom = new StyledContainer(screen);
 		bottom.setLayoutManager(new MigLayout(screen, "fill", "[]push[]", "[]"));
-		bottom.addChild(cloneATSButton);
-		bottom.addChild(dirButton);
+		bottom.addElement(cloneATSButton);
+		bottom.addElement(dirButton);
 
-		setLayoutManager(new MigLayout(screen, "wrap 1", "[fill,grow]", "[][][fill,grow][]"));
-		addChild(top);
-		addChild(type);
-		addChild(atsTable);
-		addChild(bottom);
+		setLayoutManager(new MigLayout(screen, "wrap 1", "[fill,grow]", "[shrink 0][shrink 0][fill,grow][shrink 0]"));
+		addElement(top);
+		addElement(type);
+		addElement(atsTable);
+		addElement(bottom);
 
+		atsTable.onChanged(evt -> {
+			atsSelected();
+			onSelectedChanged();
+			setAvailable();
+		});
 		new Thread("LoadATS") {
 			@Override
 			public void run() {
@@ -208,38 +189,42 @@ public class ATSTab extends XTabPanelContent {
 			File dir = getATSFolder();
 			if (dir.exists()) {
 				try {
-					monitor = ((IcesceneApp) app).getMonitor().monitorDirectory(dir, new FileMonitor.Listener() {
-						private Alarm.AlarmTask s;
+					monitor = ((IcesceneApp) ToolKit.get().getApplication()).getMonitor().monitorDirectory(dir,
+							new FileMonitor.Listener() {
+								private Alarm.AlarmTask s;
 
-						public void fileUpdated(final File file) {
-							triggerReload(file);
-						}
-
-						public void fileCreated(File file) {
-							triggerReload(file);
-						}
-
-						public void fileDeleted(File file) {
-							triggerReload(file);
-						}
-
-						private void triggerReload(final File file) {
-							// We can easily get multiple update events, so
-							// defer the reload
-							if (s != null) {
-								s.cancel();
-							}
-							s = ((IcesceneApp) app).getAlarm().timed(new Callable<Void>() {
-								public Void call() throws Exception {
-									LOG.info(String.format("ATS folder %s changed", file));
-									((ServerAssetManager) app.getAssetManager()).clearCache();
-									refilter();
-									onSelectedChanged();
-									return null;
+								public void fileUpdated(final File file) {
+									triggerReload(file);
 								}
-							}, 1);
-						}
-					});
+
+								public void fileCreated(File file) {
+									triggerReload(file);
+								}
+
+								public void fileDeleted(File file) {
+									triggerReload(file);
+								}
+
+								private void triggerReload(final File file) {
+									// We can easily get multiple update events,
+									// so
+									// defer the reload
+									if (s != null) {
+										s.cancel();
+									}
+									s = ((IcesceneApp) ToolKit.get().getApplication()).getAlarm()
+											.timed(new Callable<Void>() {
+												public Void call() throws Exception {
+													LOG.info(String.format("ATS folder %s changed", file));
+													((ServerAssetManager) ToolKit.get().getApplication()
+															.getAssetManager()).clearCache();
+													refilter();
+													onSelectedChanged();
+													return null;
+												}
+											}, 1);
+								}
+							});
 				} catch (IOException e) {
 					LOG.log(Level.SEVERE, "Failed to monitor diretory.", e);
 				}
@@ -251,19 +236,24 @@ public class ATSTab extends XTabPanelContent {
 	}
 
 	private void askForCloneName(final String sourceTemplate) {
-		final FancyInputBox dialog = new FancyInputBox(screen, new Vector2f(15, 15), FancyWindow.Size.LARGE, true) {
+		final InputBox dialog = new InputBox(screen, new Vector2f(15, 15), true) {
+			{
+				setStyleClass("large");
+			}
+
 			@Override
 			public void onButtonCancelPressed(MouseButtonEvent evt, boolean toggled) {
-				hideWindow();
+				hide();
 			}
 
 			@Override
 			public void onButtonOkPressed(MouseButtonEvent evt, String text, boolean toggled) {
 				// Check the name doesn't already exist
-				File f = ((IcesceneApp) app).getAssets().getExternalAssetFile(String.format("ATS/%s", text));
+				File f = ((IcesceneApp) ToolKit.get().getApplication()).getAssets()
+						.getExternalAssetFile(String.format("ATS/%s", text));
 				if (f.exists()) {
-					app.getStateManager().getState(HUDMessageAppState.class).message(Level.SEVERE,
-							String.format("The ATS %s already exists locally."));
+					ToolKit.get().getApplication().getStateManager().getState(HUDMessageAppState.class)
+							.message(Channel.ERROR, String.format("The ATS %s already exists locally."));
 					// hideWindow();
 				} else {
 					if (!text.startsWith("ATS-")) {
@@ -271,40 +261,39 @@ public class ATSTab extends XTabPanelContent {
 						error(err);
 
 					} else {
-						hideWindow();
+						hide();
 						cloneATS(sourceTemplate, text.replace(" ", "").replace("/", "").replace("\\", ""));
 					}
 				}
 			}
 		};
 		dialog.setDestroyOnHide(true);
-		dialog.getDragBar().setFontColor(screen.getStyle("Common").getColorRGBA("warningColor"));
+		ElementStyle.warningColor(dialog.getDragBar());
 		dialog.setWindowTitle("New Clone");
 		dialog.setButtonOkText("Clone");
 		dialog.setMsg(getATSName() + " Copy");
-		dialog.setIsResizable(false);
-		dialog.setIsMovable(false);
-		dialog.sizeToContent();
+		dialog.setResizable(false);
+		dialog.setMovable(false);
 		dialog.setWidth(300);
-		UIUtil.center(screen, dialog);
-		screen.addElement(dialog, null, true);
-		dialog.showAsModal(true);
+		dialog.setModal(true);
+		screen.showElement(dialog, ScreenLayoutConstraints.center);
 	}
 
 	private void error(String err) {
-		app.getStateManager().getState(HUDMessageAppState.class).message(Level.SEVERE, err);
+		ToolKit.get().getApplication().getStateManager().getState(HUDMessageAppState.class).message(Channel.ERROR, err);
 	}
 
 	private void error(String err, Exception t) {
-		app.getStateManager().getState(HUDMessageAppState.class).message(Level.SEVERE, err, t);
+		ToolKit.get().getApplication().getStateManager().getState(HUDMessageAppState.class).message(Channel.ERROR, err,
+				t);
 	}
 
 	private void cloneATS(String sourceTemplate, String newATSName) {
 		final String newATSDir = String.format("ATS/%s", newATSName);
 		LOG.info(String.format("New ATS directory will be %s", newATSDir));
-		cloningATSDir = new File(((IcesceneApp) app).getAssets().getExternalAssetsFolder(),
+		cloningATSDir = new File(((IcesceneApp) ToolKit.get().getApplication()).getAssets().getExternalAssetsFolder(),
 				newATSDir.replace('/', File.separatorChar));
-		final Set<IndexItem> atsAssets = ((ServerAssetManager) app.getAssetManager())
+		final Set<IndexItem> atsAssets = ((ServerAssetManager) ToolKit.get().getApplication().getAssetManager())
 				.getAssetsMatching(String.format("ATS/%s/.*", sourceTemplate));
 
 		long totalSize = 0;
@@ -324,22 +313,26 @@ public class ATSTab extends XTabPanelContent {
 		LOG.info(String.format("Will clone %d bytes of ATS %s", totalSize, sourceTemplate));
 
 		final Label progressTitle = new Label("Cloneing ..", screen);
-		final FancyWindow w = new FancyWindow(screen, Vector2f.ZERO, FancyWindow.Size.LARGE, false);
+		final Frame w = new Frame(screen, Vector2f.ZERO, false) {
+			{
+				setStyleClass("large");
+			}
+		};
 
 		w.getContentArea().setLayoutManager(new MigLayout(screen, "fill, wrap 1", "[]", "[][]"));
-		w.setIsResizable(false);
-		w.setIsMovable(false);
+		w.setResizable(false);
+		w.setMovable(false);
 		w.setWindowTitle("Cloneing");
-		w.getContentArea().addChild(progressTitle, "growx, wrap");
-		final Indicator overallProgress = new Indicator(screen, Element.Orientation.HORIZONTAL);
+		w.getContentArea().addElement(progressTitle, "growx, wrap");
+		final Indicator overallProgress = new Indicator(screen, Orientation.HORIZONTAL);
 		overallProgress.setMaxValue(useFileCount ? atsAssets.size() : 100);
 		overallProgress.setCurrentValue(0);
 		w.setDestroyOnHide(true);
-		w.getContentArea().addChild(overallProgress, "shrink 0, growx, wrap");
+		w.getContentArea().addElement(overallProgress, "shrink 0, growx, wrap");
 		w.sizeToContent();
 		w.setWidth(200);
-		UIUtil.center(screen, w);
 		screen.addElement(w);
+		screen.showElement(w, ScreenLayoutConstraints.center);
 
 		cloning = true;
 		setAvailable();
@@ -354,7 +347,7 @@ public class ATSTab extends XTabPanelContent {
 					for (IndexItem i : atsAssets) {
 						if (useFileCount) {
 							final int fi = ++index;
-							app.enqueue(new Callable<Void>() {
+							ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 								public Void call() throws Exception {
 									overallProgress.setCurrentValue(fi);
 									return null;
@@ -362,8 +355,9 @@ public class ATSTab extends XTabPanelContent {
 							});
 						}
 						LOG.info("Cloning " + i.getName());
-						final AssetInfo inf = app.getAssetManager().locateAsset(new AssetKey<String>(i.getName()));
-						app.enqueue(new Callable<Void>() {
+						final AssetInfo inf = ToolKit.get().getApplication().getAssetManager()
+								.locateAsset(new AssetKey<String>(i.getName()));
+						ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 							public Void call() throws Exception {
 								progressTitle.setText(Icelib.getFilename(inf.getKey().getName()));
 								return null;
@@ -383,7 +377,8 @@ public class ATSTab extends XTabPanelContent {
 								name = newATSDir + "/" + basename;
 							}
 
-							File outputFile = Icelib.makeParent(((IcesceneApp) app).getAssets().getExternalAssetFile(name));
+							File outputFile = Icelib.makeParent(((IcesceneApp) ToolKit.get().getApplication())
+									.getAssets().getExternalAssetFile(name));
 							OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile), 65536);
 							if (!useFileCount) {
 								out = new FilterOutputStream(out) {
@@ -422,9 +417,10 @@ public class ATSTab extends XTabPanelContent {
 										}
 									}
 
-									private void showUpdate(final Indicator overallProgress, final ThreadLocal<Long> total) {
+									private void showUpdate(final Indicator overallProgress,
+											final ThreadLocal<Long> total) {
 										final long fTot = total.get();
-										app.enqueue(new Callable<Void>() {
+										ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 											public Void call() throws Exception {
 												double d = (double) fTot / (double) fTotalSize;
 												float pc = (float) d * 100f;
@@ -444,10 +440,10 @@ public class ATSTab extends XTabPanelContent {
 							// Post processing of files
 							if (name.endsWith(".material")) {
 								String material = IOUtils.toString(outputFile.toURI());
-								material = Icelib.replaceAll("material " + sourceTemplate, "material " + newATSName, material,
-										true);
-								material = Icelib.replaceAll("texture " + sourceTemplate + "-", "texture " + newATSName + "-",
+								material = Icelib.replaceAll("material " + sourceTemplate, "material " + newATSName,
 										material, true);
+								material = Icelib.replaceAll("texture " + sourceTemplate + "-",
+										"texture " + newATSName + "-", material, true);
 								FileOutputStream fos = new FileOutputStream(outputFile);
 								try {
 									IOUtils.write(material, fos);
@@ -473,13 +469,13 @@ public class ATSTab extends XTabPanelContent {
 					}
 
 					// Re-index
-					((ServerAssetManager) app.getAssetManager()).index();
+					((ServerAssetManager) ToolKit.get().getApplication().getAssetManager()).index();
 
 					cloning = false;
-					app.enqueue(new Callable<Void>() {
+					ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 						public Void call() throws Exception {
 							setAvailable();
-							w.hideWindow();
+							w.hide();
 							refilter();
 							return null;
 						}
@@ -493,10 +489,10 @@ public class ATSTab extends XTabPanelContent {
 						LOG.log(Level.SEVERE, "Failed to clone.", e);
 					}
 					clearUpClonedDirectory();
-					app.enqueue(new Callable<Void>() {
+					ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 						public Void call() throws Exception {
 							setAvailable();
-							w.hideWindow();
+							w.hide();
 							return null;
 						}
 					});
@@ -526,7 +522,7 @@ public class ATSTab extends XTabPanelContent {
 		final String selected = getATSName();
 		if (queueUpdate) {
 			try {
-				app.enqueue(new Callable<Void>() {
+				ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 					public Void call() throws Exception {
 						resetTable();
 						return null;
@@ -549,7 +545,7 @@ public class ATSTab extends XTabPanelContent {
 
 		if (queueUpdate) {
 			try {
-				app.enqueue(new Callable<Void>() {
+				ToolKit.get().getApplication().enqueue(new Callable<Void>() {
 					public Void call() throws Exception {
 						select(selected);
 						return null;
@@ -580,7 +576,8 @@ public class ATSTab extends XTabPanelContent {
 
 	private Set<String> atsNames() {
 		final Set<String> atsNames = new LinkedHashSet<String>();
-		for (String s : ((ServerAssetManager) app.getAssetManager()).getAssetNamesMatching("ATS/ATS-.*/.*\\.png")) {
+		for (String s : ((ServerAssetManager) ToolKit.get().getApplication().getAssetManager())
+				.getAssetNamesMatching("ATS/ATS-.*/.*\\.png")) {
 			atsNames.add(FilenameUtils.normalizeNoEndSeparator(FilenameUtils.getPath(s)));
 		}
 		return atsNames;
@@ -589,12 +586,14 @@ public class ATSTab extends XTabPanelContent {
 	private void addATSRow(final String atsPath, boolean queue) {
 		// Model
 		String name = FilenameUtils.getName(atsPath);
-		if ((name.startsWith("ATS-Dungeon") && dng.getIsChecked()) || (name.startsWith("ATS-Cave") && cav.getIsChecked())
-				|| (!name.startsWith("ATS-Dungeon") && !name.startsWith("ATS-Cave") && bldg.getIsChecked())) {
+		if ((name.startsWith("ATS-Dungeon") && dng.isChecked())
+				|| (name.startsWith("ATS-Cave") && cav.isChecked())
+				|| (!name.startsWith("ATS-Dungeon") && !name.startsWith("ATS-Cave") && bldg.isChecked())) {
 			String prevImg = findPreviewImage(name);
-			final Texture tex = prevImg == null ? null : app.getAssetManager().loadTexture(prevImg);
+			final Texture tex = prevImg == null ? null
+					: ToolKit.get().getApplication().getAssetManager().loadTexture(prevImg);
 			if (queue) {
-				((IcesceneApp) app).run(new Runnable() {
+				((IcesceneApp) ToolKit.get().getApplication()).run(new Runnable() {
 					public void run() {
 						doAdd(atsPath, tex);
 					}
@@ -608,25 +607,25 @@ public class ATSTab extends XTabPanelContent {
 
 	private void doAdd(String atsPath, Texture tex) {
 		String atsName = FilenameUtils.getName(atsPath);
-		final Table.TableRow row = new Table.TableRow(screen, atsTable, atsName);
-		final ImageTableCell cell1 = new ImageTableCell(screen, atsName, 96);
+		TableRow row = new TableRow(screen, atsTable, atsName);
+		ImageTableCell cell1 = new ImageTableCell(screen, atsName, 96);
 		if (tex != null) {
 			cell1.setImageTexture(tex);
 		}
 		cell1.setMaxDimensions(cell1.getPreferredDimensions());
-		final Table.TableCell cell2 = new Table.TableCell(screen, atsName, atsName);
+		TableCell cell2 = new TableCell(screen, atsName, atsName);
 		if (getATSFolder(atsName).isDirectory())
-			ElementStyle.successColor(screen, cell2);
-		row.addChild(cell1);
-		row.addChild(cell2);
+			ElementStyle.successColor(cell2);
+		row.addElement(cell1);
+		row.addElement(cell2);
 		row.setToolTipText(atsPath);
 		atsTable.addRow(row);
 		setAvailable();
 	}
 
 	private void setAvailable() {
-		dirButton.setIsEnabled(atsTable.isAnythingSelected() && getATSFolder().isDirectory());
-		cloneATSButton.setIsEnabled(atsTable.isAnythingSelected());
+		dirButton.setEnabled(atsTable.isAnythingSelected() && getATSFolder().isDirectory());
+		cloneATSButton.setEnabled(atsTable.isAnythingSelected());
 	}
 
 	private File getATSFolder() {
@@ -634,11 +633,13 @@ public class ATSTab extends XTabPanelContent {
 	}
 
 	private File getATSFolder(String atsName) {
-		return atsName == null ? null : ((IcesceneApp) app).getAssets().getExternalAssetFile(String.format("ATS/%s", atsName));
+		return atsName == null ? null
+				: ((IcesceneApp) ToolKit.get().getApplication()).getAssets()
+						.getExternalAssetFile(String.format("ATS/%s", atsName));
 	}
 
 	private String findPreviewImage(String atsName) {
-		for (String s : ((ServerAssetManager) app.getAssetManager())
+		for (String s : ((ServerAssetManager) ToolKit.get().getApplication().getAssetManager())
 				.getAssetNamesMatching(String.format("ATS/%s/.*\\.png", atsName))) {
 			String b = FilenameUtils.getName(s);
 			for (String p : PREVIEW_IMAGE_PATTERNS) {
@@ -661,7 +662,8 @@ public class ATSTab extends XTabPanelContent {
 				LOG.info(String.format("Clearing up partially cloned directory %s", cloningATSDir));
 				FileUtils.deleteDirectory(cloningATSDir);
 			} catch (IOException ex) {
-				LOG.log(Level.SEVERE, String.format("Failed to clearing up partially cloned directory.%", cloningATSDir));
+				LOG.log(Level.SEVERE,
+						String.format("Failed to clearing up partially cloned directory.%", cloningATSDir));
 			} finally {
 				cloningATSDir = null;
 			}

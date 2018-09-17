@@ -1,44 +1,54 @@
 package org.icebuildings.app;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.Preferences;
 
 import org.icebuildings.BuildingsConfig;
-import org.icebuildings.EntityBuildableControl;
+import org.icebuildings.ComponentBuildableControl;
+import org.icebuildings.DefaultBuildableControl;
 import org.icescene.build.ObjectManipulatorControl;
 import org.icescene.build.SelectionManager;
 import org.icescene.environment.EnvironmentLight;
 import org.icescene.io.MouseManager;
-import org.icescene.props.BuildingXMLEntity;
 import org.icescene.props.Entity;
 import org.icescene.props.EntityFactory;
+import org.icescene.props.XMLProp;
+import org.icescene.props.XRef;
+import org.icescene.scene.AbstractBuildableControl;
 import org.icescene.scene.AbstractDebugSceneAppState;
+import org.icescene.scene.Buildable;
 import org.iceui.IceUI;
 
 import com.jme3.scene.Node;
 import com.jme3.scene.Spatial;
+
+import icetone.core.undo.UndoManager;
 
 public class PreviewAppState extends AbstractDebugSceneAppState {
 
 	private EntityFactory loader;
 	private final EnvironmentLight environmentLight;
 
-	private BuildingXMLEntity building;
+	private XMLProp building;
 	private String ats;
-	private Entity piece;
+	private Buildable piece;
 	private MouseManager mouseManager;
 	private ObjectManipulatorControl omc;
-	private SelectionManager<Entity, EntityBuildableControl> selectionManager;
+	private SelectionManager<Buildable, DefaultBuildableControl> selectionManager;
 	private Spatial buildingSpatial;
 	private boolean editable;
+	private UndoManager undoManager;
 
-	public PreviewAppState(EnvironmentLight environmentLight, SelectionManager<Entity, EntityBuildableControl> selectionManager,
-			Node parentNode, Preferences prefs, EntityFactory loader) {
+	public PreviewAppState(EnvironmentLight environmentLight,
+			SelectionManager<Buildable, DefaultBuildableControl> selectionManager, Node parentNode, Preferences prefs,
+			EntityFactory loader, UndoManager undoManager) {
 		super(prefs, parentNode);
 		addPrefKeyPattern(BuildingsConfig.BUILDINGS + ".*");
 		this.selectionManager = selectionManager;
 		this.environmentLight = environmentLight;
+		this.undoManager = undoManager;
 
 		this.loader = loader;
 	}
@@ -53,12 +63,13 @@ public class PreviewAppState extends AbstractDebugSceneAppState {
 	@Override
 	protected void handlePrefUpdateSceneThread(PreferenceChangeEvent evt) {
 		super.handlePrefUpdateSceneThread(evt);
-		if (evt.getKey().equals(BuildingsConfig.BUILDINGS_LIGHT) || evt.getKey().equals(BuildingsConfig.BUILDINGS_LIGHT_COLOUR)) {
+		if (evt.getKey().equals(BuildingsConfig.BUILDINGS_LIGHT)
+				|| evt.getKey().equals(BuildingsConfig.BUILDINGS_LIGHT_COLOUR)) {
 			setLightColour();
 		}
 	}
 
-	public void setPiece(Entity piece) {
+	public void setPiece(Buildable piece) {
 		// TODO bit extreme
 		removeBuilding();
 		this.piece = piece;
@@ -75,17 +86,17 @@ public class PreviewAppState extends AbstractDebugSceneAppState {
 				if (!editable) {
 					removeManipulator();
 					selectionManager.setMouseEnabled(false);
-//					removeBuildableControlFromComponents();
+					// removeBuildableControlFromComponents();
 				} else {
 					selectionManager.setMouseEnabled(true);
-//					addBuildableControlToComponents();
+					// addBuildableControlToComponents();
 				}
 			}
 			this.editable = editable;
 		}
 	}
 
-	public void setBuilding(BuildingXMLEntity building) {
+	public void setBuilding(XMLProp building) {
 		if (Objects.equals(building, this.building)) {
 			return;
 		}
@@ -96,25 +107,43 @@ public class PreviewAppState extends AbstractDebugSceneAppState {
 		removeBuilding();
 		this.building = building;
 		createSpatial();
-//		if (this.building != null && editable)
+		// if (this.building != null && editable)
 		if (this.building != null)
 			addBuildableControlToComponents();
 	}
 
 	private void addBuildableControlToComponents() {
-		for (Entity e : this.building.getComponent().getEntities()) {
+		createBuildableControls(building.getComponent().getEntities());
+		createBuildableControls(building.getComponent().getXRefs());
+	}
+
+	protected void createBuildableControls(List<? extends Buildable> l) {
+		for (Buildable e : l) {
 			Spatial m = this.building.getMesh(e);
 			if (m != null) {
-				m.addControl(new EntityBuildableControl(assetManager, rootNode, this.building, e));
+				m.addControl(createBuildableControl(e));
 			}
 		}
+	}
+
+	protected void onApply(AbstractBuildableControl<Buildable> actualBuildable) {
+	}
+
+	protected DefaultBuildableControl createBuildableControl(Buildable e) {
+		return new ComponentBuildableControl(assetManager, rootNode, this.building, e, undoManager);
 	}
 
 	private void removeBuildableControlFromComponents() {
 		for (Entity e : this.building.getComponent().getEntities()) {
 			Spatial m = this.building.getMesh(e);
 			if (m != null) {
-				m.removeControl(EntityBuildableControl.class);
+				m.removeControl(DefaultBuildableControl.class);
+			}
+		}
+		for (XRef e : this.building.getComponent().getXRefs()) {
+			Spatial m = this.building.getMesh(e);
+			if (m != null) {
+				m.removeControl(DefaultBuildableControl.class);
 			}
 		}
 	}
@@ -136,14 +165,15 @@ public class PreviewAppState extends AbstractDebugSceneAppState {
 		// loads
 	}
 
-	public BuildingXMLEntity getSpatial() {
+	public XMLProp getSpatial() {
 		return building;
 	}
 
 	protected void setLightColour() {
-		environmentLight.setAmbientColor(IceUI.getColourPreference(prefs, BuildingsConfig.BUILDINGS_LIGHT_COLOUR,
-				BuildingsConfig.BUILDINGS_LIGHT_COLOUR_DEFAULT).multLocal(
-				prefs.getFloat(BuildingsConfig.BUILDINGS_LIGHT, BuildingsConfig.BUILDINGS_LIGHT_DEFAULT)));
+		environmentLight.setAmbientColor(IceUI
+				.getColourPreference(prefs, BuildingsConfig.BUILDINGS_LIGHT_COLOUR,
+						BuildingsConfig.BUILDINGS_LIGHT_COLOUR_DEFAULT)
+				.multLocal(prefs.getFloat(BuildingsConfig.BUILDINGS_LIGHT, BuildingsConfig.BUILDINGS_LIGHT_DEFAULT)));
 	}
 
 	private void removeManipulator() {

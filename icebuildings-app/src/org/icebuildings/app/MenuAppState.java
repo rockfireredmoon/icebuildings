@@ -2,29 +2,29 @@ package org.icebuildings.app;
 
 import java.util.prefs.Preferences;
 
-import org.icelib.UndoManager;
 import org.icescene.IcemoonAppState;
 import org.icescene.props.EntityFactory;
-import org.iceui.controls.FancyButton;
-import org.iceui.controls.FancyDialogBox;
-import org.iceui.controls.FancyWindow;
-import org.iceui.controls.UIUtil;
+import org.iceui.controls.ElementStyle;
 
 import com.jme3.input.event.MouseButtonEvent;
 import com.jme3.math.Vector2f;
 
-import icetone.core.Container;
-import icetone.core.Element.ZPriority;
+import icetone.controls.buttons.PushButton;
+import icetone.core.StyledContainer;
+import icetone.core.ZPriority;
+import icetone.core.layout.ScreenLayoutConstraints;
 import icetone.core.layout.mig.MigLayout;
+import icetone.core.undo.UndoManager;
+import icetone.extras.windows.DialogBox;
 
 public class MenuAppState extends IcemoonAppState<IcemoonAppState<?>> {
 	public enum ItemMenuActions {
 		NEW_ITEM, DELETE_ITEM, EDIT_ITEM, CLONE_ITEM
 	}
 
-	private Container layer;
-	private FancyButton options;
-	private FancyButton exit;
+	private StyledContainer layer;
+	private PushButton options;
+	private PushButton exit;
 
 	public MenuAppState(UndoManager undoManager, EntityFactory propFactory, Preferences prefs) {
 		super(prefs);
@@ -33,36 +33,36 @@ public class MenuAppState extends IcemoonAppState<IcemoonAppState<?>> {
 	@Override
 	protected void postInitialize() {
 
-		layer = new Container(screen);
+		layer = new StyledContainer(screen);
 		layer.setLayoutManager(new MigLayout(screen, "fill", "push[][][][]push", "[]push"));
 
 		// Options
-		options = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				toggleOptions();
+		options = new PushButton(screen) {
+			{
+				setStyleClass("fancy");
 			}
 		};
+		options.onMouseReleased(evt -> toggleOptions());
 		options.setText("Options");
-		layer.addChild(options);
+		layer.addElement(options);
 
 		// Exit
-		exit = new FancyButton(screen) {
-			@Override
-			public void onButtonMouseLeftUp(MouseButtonEvent evt, boolean toggled) {
-				exitApp();
+		exit = new PushButton(screen) {
+			{
+				setStyleClass("fancy");
 			}
 		};
+		exit.onMouseReleased(evt -> exitApp());
 		exit.setText("Exit");
-		layer.addChild(exit);
+		layer.addElement(exit);
 
 		//
-		app.getLayers(ZPriority.MENU).addChild(layer);
+		app.getLayers(ZPriority.MENU).addElement(layer);
 	}
 
 	@Override
 	protected void onCleanup() {
-		app.getLayers(ZPriority.MENU).removeChild(layer);
+		app.getLayers(ZPriority.MENU).removeElement(layer);
 	}
 
 	private void toggleOptions() {
@@ -75,10 +75,14 @@ public class MenuAppState extends IcemoonAppState<IcemoonAppState<?>> {
 	}
 
 	private void exitApp() {
-		final FancyDialogBox dialog = new FancyDialogBox(screen, new Vector2f(15, 15), FancyWindow.Size.LARGE, true) {
+		final DialogBox dialog = new DialogBox(screen, new Vector2f(15, 15), true) {
+			{
+				setStyleClass("large");
+			}
+
 			@Override
 			public void onButtonCancelPressed(MouseButtonEvent evt, boolean toggled) {
-				hideWindow();
+				hide();
 			}
 
 			@Override
@@ -87,15 +91,13 @@ public class MenuAppState extends IcemoonAppState<IcemoonAppState<?>> {
 			}
 		};
 		dialog.setDestroyOnHide(true);
-		dialog.getDragBar().setFontColor(screen.getStyle("Common").getColorRGBA("warningColor"));
+		ElementStyle.warningColor(dialog.getDragBar());
 		dialog.setWindowTitle("Confirm Exit");
 		dialog.setButtonOkText("Exit");
 		dialog.setMsg("Are you sure you wish to exit? Make sure you have saved!");
-		dialog.setIsResizable(false);
-		dialog.setIsMovable(false);
-		dialog.sizeToContent();
-		UIUtil.center(screen, dialog);
-		screen.addElement(dialog, null, true);
-		dialog.showAsModal(true);
+		dialog.setResizable(false);
+		dialog.setMovable(false);
+		dialog.setModal(true);
+		screen.showElement(dialog, ScreenLayoutConstraints.center);
 	}
 }

@@ -1,7 +1,5 @@
 package org.icebuildings.app;
 
-import icemoon.iceloader.ServerAssetManager;
-
 import java.util.logging.Logger;
 
 import org.apache.commons.cli.CommandLine;
@@ -9,28 +7,31 @@ import org.apache.commons.cli.Options;
 import org.icebuildings.BuildingEditorAppState;
 import org.icebuildings.BuildingsConfig;
 import org.icebuildings.BuildingsConstants;
-import org.icebuildings.EntityBuildableControl;
+import org.icebuildings.DefaultBuildableControl;
 import org.icelib.AppInfo;
-import org.icelib.Appearance;
-import org.icelib.UndoManager;
 import org.icescene.HUDMessageAppState;
 import org.icescene.IcesceneApp;
 import org.icescene.assets.Assets;
 import org.icescene.build.ObjectManipulatorManager;
 import org.icescene.build.SelectionManager;
+import org.icescene.debug.LoadScreenAppState;
 import org.icescene.environment.EnvironmentLight;
 import org.icescene.environment.PostProcessAppState;
 import org.icescene.io.ModifierKeysAppState;
 import org.icescene.io.MouseManager;
 import org.icescene.options.OptionsAppState;
-import org.icescene.props.BuildingXMLEntity;
-import org.icescene.props.Entity;
 import org.icescene.props.EntityFactory;
-import org.icescene.ui.WindowManagerAppState;
+import org.icescene.props.XMLProp;
+import org.icescene.scene.AbstractBuildableControl;
+import org.icescene.scene.Buildable;
 import org.lwjgl.opengl.Display;
 
 import com.jme3.input.controls.ActionListener;
 import com.jme3.math.Vector3f;
+
+import icemoon.iceloader.ServerAssetManager;
+import icetone.core.undo.UndoManager;
+import icetone.extras.appstates.FrameManagerAppState;
 
 public class Icebuildings extends IcesceneApp implements ActionListener {
 
@@ -82,16 +83,6 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 
 		propFactory = new EntityFactory(this, rootNode);
 
-		// The default creature
-		Appearance appearance = new Appearance();
-
-		appearance.setName(Appearance.Name.C2);
-		appearance.setName(Appearance.Name.C2);
-		appearance.setBody(Appearance.Body.NORMAL);
-		appearance.setGender(Appearance.Gender.MALE);
-		appearance.setRace(Appearance.Race.HART);
-		appearance.setHead(Appearance.Head.NORMAL);
-
 		flyCam.setDragToRotate(true);
 		flyCam.setMoveSpeed(
 				prefs.getFloat(BuildingsConfig.BUILDINGS_MOVE_SPEED, BuildingsConfig.BUILDINGS_MOVE_SPEED_DEFAULT));
@@ -101,6 +92,12 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 				-prefs.getFloat(BuildingsConfig.BUILDINGS_ZOOM_SPEED, BuildingsConfig.BUILDINGS_ZOOM_SPEED_DEFAULT));
 		flyCam.setEnabled(true);
 		setPauseOnLostFocus(false);
+
+		// Load screen
+		LoadScreenAppState load = new LoadScreenAppState(prefs);
+		load.setAutoShowOnDownloads(true);
+		load.setAutoShowOnTasks(true);
+		stateManager.attach(load);
 
 		// Undo manager
 		UndoManager undoManager = new UndoManager();
@@ -117,18 +114,18 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 		stateManager.attach(new HUDMessageAppState());
 
 		// Some windows need management
-		stateManager.attach(new WindowManagerAppState(prefs));
+		stateManager.attach(new FrameManagerAppState(screen));
 
 		// Mouse manager requires modifier keys to be monitored
 		stateManager.attach(new ModifierKeysAppState());
 
 		// Mouse manager for dealing with clicking, dragging etc.
-		final MouseManager mouseManager = new MouseManager(rootNode, getAlarm());
+		final MouseManager mouseManager = new MouseManager(rootNode);
 		stateManager.attach(mouseManager);
 
 		// Select manager
-		SelectionManager<Entity, EntityBuildableControl> selectionManager = new SelectionManager<Entity, EntityBuildableControl>(
-				mouseManager, EntityBuildableControl.class);
+		SelectionManager<Buildable, DefaultBuildableControl> selectionManager = new SelectionManager<Buildable, DefaultBuildableControl>(
+				mouseManager, DefaultBuildableControl.class);
 		selectionManager.setMouseEnabled(false);
 
 		// Object manipulator. Hooks into the select manager consuming its event
@@ -141,7 +138,11 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 		stateManager.attach(new UIAppState(undoManager, prefs));
 
 		// The main on screen model
-		previewAppState = new PreviewAppState(el, selectionManager, rootNode, prefs, propFactory);
+		previewAppState = new PreviewAppState(el, selectionManager, rootNode, prefs, propFactory, undoManager) {
+			@Override
+			protected void onApply(AbstractBuildableControl<Buildable> actualBuildable) {
+			}
+		};
 		getStateManager().attach(previewAppState);
 
 		// Building editor
@@ -150,14 +151,21 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 
 					@Override
 					protected void selectionChanged() {
-						BuildingXMLEntity selectedBuilding = getSelectedBuilding();
+						XMLProp selectedBuilding = getSelectedBuilding();
 						if (selectedBuilding != null) {
 							previewAppState.setBuilding(selectedBuilding);
 						}
 					}
 
-					protected void pieceSelected() {
-						Entity selectedPiece = getSelectedPiece();
+					@Override
+					protected void refreshPiece() {
+						super.refreshPiece();
+						// previewAppState.setPiece(getSelectedPiece());
+					}
+
+					@Override
+					protected void buildableSelected() {
+						Buildable selectedPiece = getSelectedBuilable();
 						if (selectedPiece != null) {
 							previewAppState.setPiece(selectedPiece);
 						}
@@ -165,11 +173,16 @@ public class Icebuildings extends IcesceneApp implements ActionListener {
 
 				});
 
+		cam.setLocation(new Vector3f(-1, 9f, 32f));
+	}
+
+	@Override
+	public void registerAllInput() {
+		super.registerAllInput();
+
 		// Input
 		getKeyMapManager().addMapping(MAPPING_OPTIONS);
 		getKeyMapManager().addListener(this, MAPPING_OPTIONS);
-
-		cam.setLocation(new Vector3f(-1, 9f, 32f));
 	}
 
 	@Override
